@@ -29,6 +29,20 @@ const BACKGROUNDS = [
   }
 ]
 
+function preloadImages(imageUrls: string[]): Promise<void> {
+  return Promise.all(
+    imageUrls.map(
+      src =>
+        new Promise<void>((resolve) => {
+          const img = new Image()
+          img.src = src
+          img.onload = () => resolve()
+          img.onerror = () => resolve()
+        })
+    )
+  ).then(() => undefined)
+}
+
 export function Game() {
   const sceneRef = useRef<HTMLDivElement>(null)
   const [playerX, setPlayerX] = useState(GAME_WIDTH / 2 - PLAYER_WIDTH / 2)
@@ -41,6 +55,14 @@ export function Game() {
   const [portalPos, setPortalPos] = useState({ x: 150, y: 1200 })
   const [direction, setDirection] = useState<'left' | 'right' | null>(null)
   const [gameOver, setGameOver] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const allImages = BACKGROUNDS.flatMap(bg => [bg.sky, ...bg.obstacles]).concat('/portal.png', '/astronaut.png')
+    preloadImages(allImages).then(() => {
+      setLoading(false)
+    })
+  }, [])
 
   useEffect(() => {
     const bgs = []
@@ -116,68 +138,67 @@ export function Game() {
   }, [currentBg, gameOver])
 
   useEffect(() => {
-  const COLLISION_OFFSET = 20
+    const COLLISION_OFFSET = 20
 
-  if (!portalVisible && Date.now() - portalTime > PORTAL_COOLDOWN) {
-    setPortalVisible(true)
-    setPortalPos({ x: Math.random() * (GAME_WIDTH - PORTAL_SIZE), y: distance + 1200 })
-  }
-
-  const playerBox = {
-    x: playerX + COLLISION_OFFSET,
-    y: distance + 0.4 * GAME_HEIGHT + COLLISION_OFFSET,
-    w: PLAYER_WIDTH - COLLISION_OFFSET * 2,
-    h: PLAYER_HEIGHT - COLLISION_OFFSET * 2
-  }
-
-  const portalBox = {
-    x: portalPos.x + COLLISION_OFFSET,
-    y: portalPos.y + COLLISION_OFFSET,
-    w: PORTAL_SIZE - COLLISION_OFFSET * 2,
-    h: PORTAL_SIZE - COLLISION_OFFSET * 2
-  }
-
-  const collidePortal =
-    playerBox.x < portalBox.x + portalBox.w &&
-    playerBox.x + playerBox.w > portalBox.x &&
-    playerBox.y < portalBox.y + portalBox.h &&
-    playerBox.y + playerBox.h > portalBox.y
-
-  if (portalVisible && collidePortal) {
-    let next = Math.floor(Math.random() * BACKGROUNDS.length)
-    while (next === currentBg) next = Math.floor(Math.random() * BACKGROUNDS.length)
-    setCurrentBg(next)
-    setPortalVisible(false)
-    setPortalTime(Date.now())
-    setBgInstances(() => {
-      const updated = []
-      for (let i = -1; i < 10; i++) updated.push({ id: next, y: (distance + i * GAME_HEIGHT) })
-      return updated
-    })
-    setObstacles([])
-  }
-
-  for (const o of obstacles) {
-    const oBox = {
-      x: o.x + COLLISION_OFFSET,
-      y: o.y + COLLISION_OFFSET,
-      w: OBSTACLE_SIZE - COLLISION_OFFSET * 2,
-      h: OBSTACLE_SIZE - COLLISION_OFFSET * 2
+    if (!portalVisible && Date.now() - portalTime > PORTAL_COOLDOWN) {
+      setPortalVisible(true)
+      setPortalPos({ x: Math.random() * (GAME_WIDTH - PORTAL_SIZE), y: distance + 1200 })
     }
 
-    const hit =
-      playerBox.x < oBox.x + oBox.w &&
-      playerBox.x + playerBox.w > oBox.x &&
-      playerBox.y < oBox.y + oBox.h &&
-      playerBox.y + playerBox.h > oBox.y
-
-    if (hit) {
-      setGameOver(true)
-      break
+    const playerBox = {
+      x: playerX + COLLISION_OFFSET,
+      y: distance + 0.4 * GAME_HEIGHT + COLLISION_OFFSET,
+      w: PLAYER_WIDTH - COLLISION_OFFSET * 2,
+      h: PLAYER_HEIGHT - COLLISION_OFFSET * 2
     }
-  }
-}, [playerX, distance, portalVisible, obstacles, gameOver])
 
+    const portalBox = {
+      x: portalPos.x + COLLISION_OFFSET,
+      y: portalPos.y + COLLISION_OFFSET,
+      w: PORTAL_SIZE - COLLISION_OFFSET * 2,
+      h: PORTAL_SIZE - COLLISION_OFFSET * 2
+    }
+
+    const collidePortal =
+      playerBox.x < portalBox.x + portalBox.w &&
+      playerBox.x + playerBox.w > portalBox.x &&
+      playerBox.y < portalBox.y + portalBox.h &&
+      playerBox.y + playerBox.h > portalBox.y
+
+    if (portalVisible && collidePortal) {
+      let next = Math.floor(Math.random() * BACKGROUNDS.length)
+      while (next === currentBg) next = Math.floor(Math.random() * BACKGROUNDS.length)
+      setCurrentBg(next)
+      setPortalVisible(false)
+      setPortalTime(Date.now())
+      setBgInstances(() => {
+        const updated = []
+        for (let i = -1; i < 10; i++) updated.push({ id: next, y: (distance + i * GAME_HEIGHT) })
+        return updated
+      })
+      setObstacles([])
+    }
+
+    for (const o of obstacles) {
+      const oBox = {
+        x: o.x + COLLISION_OFFSET,
+        y: o.y + COLLISION_OFFSET,
+        w: OBSTACLE_SIZE - COLLISION_OFFSET * 2,
+        h: OBSTACLE_SIZE - COLLISION_OFFSET * 2
+      }
+
+      const hit =
+        playerBox.x < oBox.x + oBox.w &&
+        playerBox.x + playerBox.w > oBox.x &&
+        playerBox.y < oBox.y + oBox.h &&
+        playerBox.y + playerBox.h > oBox.y
+
+      if (hit) {
+        setGameOver(true)
+        break
+      }
+    }
+  }, [playerX, distance, portalVisible, obstacles, gameOver])
 
   const restart = () => {
     setDistance(0)
@@ -187,6 +208,14 @@ export function Game() {
     setPortalVisible(true)
     setPortalTime(Date.now())
     setGameOver(false)
+  }
+
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <div>Загрузка...</div>
+      </div>
+    )
   }
 
   return (
