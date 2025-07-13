@@ -29,20 +29,6 @@ const BACKGROUNDS = [
   }
 ]
 
-function preloadImages(imageUrls: string[]): Promise<void> {
-  return Promise.all(
-    imageUrls.map(
-      src =>
-        new Promise<void>((resolve) => {
-          const img = new Image()
-          img.src = src
-          img.onload = () => resolve()
-          img.onerror = () => resolve()
-        })
-    )
-  ).then(() => undefined)
-}
-
 export function Game() {
   const sceneRef = useRef<HTMLDivElement>(null)
   const [playerX, setPlayerX] = useState(GAME_WIDTH / 2 - PLAYER_WIDTH / 2)
@@ -55,12 +41,26 @@ export function Game() {
   const [portalPos, setPortalPos] = useState({ x: 150, y: 1200 })
   const [direction, setDirection] = useState<'left' | 'right' | null>(null)
   const [gameOver, setGameOver] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loaded, setLoaded] = useState(false)
 
+  // Load all images before starting
   useEffect(() => {
-    const allImages = BACKGROUNDS.flatMap(bg => [bg.sky, ...bg.obstacles]).concat('/portal.png', '/astronaut.png')
-    preloadImages(allImages).then(() => {
-      setLoading(false)
+    const allImages = [
+      '/astronaut.png',
+      '/portal.png',
+      ...BACKGROUNDS.flatMap(bg => [bg.sky, ...bg.obstacles])
+    ]
+
+    let loadedCount = 0
+    allImages.forEach(src => {
+      const img = new Image()
+      img.src = src
+      img.onload = () => {
+        loadedCount++
+        if (loadedCount === allImages.length) {
+          setLoaded(true)
+        }
+      }
     })
   }, [])
 
@@ -68,15 +68,15 @@ export function Game() {
     const bgs = []
     for (let i = -1; i < 10; i++) bgs.push({ id: currentBg, y: i * GAME_HEIGHT })
     setBgInstances(bgs)
-  }, [])
+  }, [currentBg])
 
   useEffect(() => {
-    if (gameOver) return
+    if (gameOver || !loaded) return
     const interval = setInterval(() => {
       setDistance(prev => prev + GRAVITY)
     }, 16)
     return () => clearInterval(interval)
-  }, [gameOver])
+  }, [gameOver, loaded])
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -93,7 +93,7 @@ export function Game() {
   }, [])
 
   useEffect(() => {
-    if (!direction || gameOver) return
+    if (!direction || gameOver || !loaded) return
     const interval = setInterval(() => {
       setPlayerX(prev => {
         if (direction === 'left') return Math.max(0, prev - 5)
@@ -102,10 +102,10 @@ export function Game() {
       })
     }, 16)
     return () => clearInterval(interval)
-  }, [direction, gameOver])
+  }, [direction, gameOver, loaded])
 
   useEffect(() => {
-    if (gameOver) return
+    if (gameOver || !loaded) return
     const interval = setInterval(() => {
       setObstacles(prev =>
         prev.map(o => ({
@@ -115,10 +115,10 @@ export function Game() {
       )
     }, 16)
     return () => clearInterval(interval)
-  }, [gameOver])
+  }, [gameOver, loaded])
 
   useEffect(() => {
-    if (gameOver) return
+    if (gameOver || !loaded) return
     const spawn = setInterval(() => {
       const world = BACKGROUNDS[currentBg]
       const image = world.obstacles[Math.floor(Math.random() * 3)]
@@ -135,7 +135,7 @@ export function Game() {
       ])
     }, OBSTACLE_INTERVAL + Math.random() * 400)
     return () => clearInterval(spawn)
-  }, [currentBg, gameOver])
+  }, [currentBg, gameOver, loaded])
 
   useEffect(() => {
     const COLLISION_OFFSET = 20
@@ -210,10 +210,10 @@ export function Game() {
     setGameOver(false)
   }
 
-  if (loading) {
+  if (!loaded) {
     return (
-      <div className="loading-screen">
-        <div>Загрузка...</div>
+      <div className="game-scene">
+        <div className="loading">Загрузка...</div>
       </div>
     )
   }
@@ -235,6 +235,11 @@ export function Game() {
       </div>
 
       <img src="/astronaut.png" className="player" style={{ left: playerX, top: '40%', width: PLAYER_WIDTH, height: PLAYER_HEIGHT }} />
+
+      <div className="mobile-controls">
+        <button onTouchStart={() => setDirection('left')} onTouchEnd={() => setDirection(null)}>←</button>
+        <button onTouchStart={() => setDirection('right')} onTouchEnd={() => setDirection(null)}>→</button>
+      </div>
 
       {gameOver && (
         <div className="game-over">
