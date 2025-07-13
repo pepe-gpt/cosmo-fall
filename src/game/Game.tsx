@@ -35,15 +35,15 @@ export function Game() {
   const [distance, setDistance] = useState(0)
   const [obstacles, setObstacles] = useState<any[]>([])
   const [currentBg, setCurrentBg] = useState(0)
-  const [bgInstances, setBgInstances] = useState<{ id: number, y: number }[]>([])
+  const [bgInstances, setBgInstances] = useState<{ id: number; y: number }[]>([])
   const [portalVisible, setPortalVisible] = useState(true)
   const [portalTime, setPortalTime] = useState(Date.now())
   const [portalPos, setPortalPos] = useState({ x: 150, y: 1200 })
   const [direction, setDirection] = useState<'left' | 'right' | null>(null)
   const [gameOver, setGameOver] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  // Load all images before starting
+  // ⏳ Preload all images
   useEffect(() => {
     const allImages = [
       '/astronaut.png',
@@ -51,33 +51,35 @@ export function Game() {
       ...BACKGROUNDS.flatMap(bg => [bg.sky, ...bg.obstacles])
     ]
 
-    let loadedCount = 0
+    let loaded = 0
     allImages.forEach(src => {
       const img = new Image()
       img.src = src
       img.onload = () => {
-        loadedCount++
-        if (loadedCount === allImages.length) {
-          setLoaded(true)
+        loaded++
+        if (loaded === allImages.length) {
+          setLoading(false)
         }
       }
     })
   }, [])
 
+  // 🧱 Init backgrounds
   useEffect(() => {
     const bgs = []
     for (let i = -1; i < 10; i++) bgs.push({ id: currentBg, y: i * GAME_HEIGHT })
     setBgInstances(bgs)
-  }, [currentBg])
+  }, [])
 
   useEffect(() => {
-    if (gameOver || !loaded) return
+    if (gameOver || loading) return
     const interval = setInterval(() => {
       setDistance(prev => prev + GRAVITY)
     }, 16)
     return () => clearInterval(interval)
-  }, [gameOver, loaded])
+  }, [gameOver, loading])
 
+  // 🎮 Keyboard control
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') setDirection('left')
@@ -92,8 +94,24 @@ export function Game() {
     }
   }, [])
 
+  // 📱 Touch control
   useEffect(() => {
-    if (!direction || gameOver || !loaded) return
+    const handleTouchStart = (e: TouchEvent) => {
+      const x = e.touches[0].clientX
+      if (x < window.innerWidth / 2) setDirection('left')
+      else setDirection('right')
+    }
+    const handleTouchEnd = () => setDirection(null)
+    window.addEventListener('touchstart', handleTouchStart)
+    window.addEventListener('touchend', handleTouchEnd)
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!direction || gameOver || loading) return
     const interval = setInterval(() => {
       setPlayerX(prev => {
         if (direction === 'left') return Math.max(0, prev - 5)
@@ -102,23 +120,20 @@ export function Game() {
       })
     }, 16)
     return () => clearInterval(interval)
-  }, [direction, gameOver, loaded])
+  }, [direction, gameOver, loading])
 
+  // 🧱 Move obstacles
   useEffect(() => {
-    if (gameOver || !loaded) return
+    if (gameOver || loading) return
     const interval = setInterval(() => {
-      setObstacles(prev =>
-        prev.map(o => ({
-          ...o,
-          y: o.y + o.speed
-        }))
-      )
+      setObstacles(prev => prev.map(o => ({ ...o, y: o.y + o.speed })))
     }, 16)
     return () => clearInterval(interval)
-  }, [gameOver, loaded])
+  }, [gameOver, loading])
 
+  // 🎲 Spawn obstacles
   useEffect(() => {
-    if (gameOver || !loaded) return
+    if (gameOver || loading) return
     const spawn = setInterval(() => {
       const world = BACKGROUNDS[currentBg]
       const image = world.obstacles[Math.floor(Math.random() * 3)]
@@ -135,8 +150,9 @@ export function Game() {
       ])
     }, OBSTACLE_INTERVAL + Math.random() * 400)
     return () => clearInterval(spawn)
-  }, [currentBg, gameOver, loaded])
+  }, [currentBg, gameOver, loading])
 
+  // ⚡ Collision and portal
   useEffect(() => {
     const COLLISION_OFFSET = 20
 
@@ -173,7 +189,7 @@ export function Game() {
       setPortalTime(Date.now())
       setBgInstances(() => {
         const updated = []
-        for (let i = -1; i < 10; i++) updated.push({ id: next, y: (distance + i * GAME_HEIGHT) })
+        for (let i = -1; i < 10; i++) updated.push({ id: next, y: distance + i * GAME_HEIGHT })
         return updated
       })
       setObstacles([])
@@ -210,13 +226,7 @@ export function Game() {
     setGameOver(false)
   }
 
-  if (!loaded) {
-    return (
-      <div className="game-scene">
-        <div className="loading">Загрузка...</div>
-      </div>
-    )
-  }
+  if (loading) return <div className="loading-screen">Загрузка...</div>
 
   return (
     <div ref={sceneRef} className="game-scene">
@@ -235,11 +245,6 @@ export function Game() {
       </div>
 
       <img src="/astronaut.png" className="player" style={{ left: playerX, top: '40%', width: PLAYER_WIDTH, height: PLAYER_HEIGHT }} />
-
-      <div className="mobile-controls">
-        <button onTouchStart={() => setDirection('left')} onTouchEnd={() => setDirection(null)}>←</button>
-        <button onTouchStart={() => setDirection('right')} onTouchEnd={() => setDirection(null)}>→</button>
-      </div>
 
       {gameOver && (
         <div className="game-over">
